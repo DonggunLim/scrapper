@@ -1,0 +1,55 @@
+name: Scrape Hacker News
+
+on:
+  schedule:
+    # 매일 오전 9시, 오후 6시 (KST 기준)
+    - cron: "0 0 * * *" # 9AM KST
+    - cron: "0 9 * * *" # 6PM KST
+
+  # 수동 실행
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: sqlite3, pdo_sqlite
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium
+          npx playwright install-deps
+
+      - name: Setup Laravel
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Run news scraping
+        run: php artisan scrape:hacker-news
+
+      - name: Upload database
+        uses: actions/upload-artifact@v3
+        with:
+          name: database-${{ github.run_number }}
+          path: database/database.sqlite
+          retention-days: 7
